@@ -133,13 +133,13 @@ _set_chr_mode_5:
 ; the IRQ system is not changing CHR
 
 safe_bank_swapping:
-	lda mmc3_8000_PRG
-	sta $8000
-	lda mmc3_8001_PRG
-	sta $8001
 	lda mmc3_8000_CHR
 	sta $8000
 	lda mmc3_8001_CHR
+	sta $8001
+	lda mmc3_8000_PRG
+	sta $8000
+	lda mmc3_8001_PRG
 	sta $8001
 	rts
 	
@@ -227,7 +227,7 @@ irq:
 	
 irq_parser:
 	ldy mmc3_index
-	ldx #0
+;	ldx #0
 @loop:
 	lda (mmc3_ptr), y ; get value from array
 	iny
