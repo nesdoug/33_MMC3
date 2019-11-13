@@ -30,10 +30,11 @@
 	mmc3_8001_CHR:	.res 1
 	mmc3_ptr:		.res 2 ; array for the irq parser
 	mmc3_index:		.res 1 ; index to this array
+	irq_done:		.res 1
 
 	
     .exportzp BP_BANK_8000, mmc3_8000_PRG, mmc3_8001_PRG, mmc3_8000_CHR, mmc3_8001_CHR
-	.exportzp mmc3_ptr, mmc3_index
+	.exportzp mmc3_ptr, mmc3_index, irq_done
 	
 
 .segment "STARTUP"
@@ -44,7 +45,7 @@
 .export _set_chr_mode_4, _set_chr_mode_5
 
 .export _set_mirroring, _set_wram_mode, _disable_irq
-.export _set_irq_ptr
+.export _set_irq_ptr, _is_irq_done
 
 
 ; sets the bank at $8000-9fff
@@ -171,6 +172,12 @@ _set_irq_ptr:
 	sta mmc3_ptr
 	stx mmc3_ptr+1
 	rts	
+	
+	
+_is_irq_done:
+	lda irq_done
+	ldx #0
+	rts
 
 	
 default_array: ;just an eof terminator
@@ -309,6 +316,7 @@ irq_parser:
 	rts
 	
 @exit:
+	sta irq_done ;value 0xff
 	dey ; undo the previous iny, keep it pointed to ff
 	sty mmc3_index
 	rts

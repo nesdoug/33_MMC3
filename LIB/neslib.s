@@ -43,6 +43,7 @@ nmi:
 	
 	lda #0
 	sta mmc3_index
+	sta irq_done
 
 	lda <PPU_MASK_VAR	;if rendering is disabled, do not access the VRAM at all
 	and #%00011000

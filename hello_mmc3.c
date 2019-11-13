@@ -18,9 +18,6 @@ unsigned char arg2;
 unsigned char pad1;
 unsigned char pad1_new;
 unsigned char char_state;
-unsigned char song;
-unsigned char sound;
-unsigned char pauze;
 
 // fixed point 8.8
 unsigned int scroll_top;
@@ -37,7 +34,8 @@ unsigned char dirLR;
 #pragma bss-name(pop)
 // should be in the regular 0x300 ram now
 
-unsigned char irq_array[64];
+unsigned char irq_array[32];
+unsigned char double_buffer[32];
 
 
 #pragma bss-name(push, "XRAM")
@@ -173,9 +171,16 @@ void main (void) {
 	bank_spr(1);
 	irq_array[0] = 0xff; // end of data
 	set_irq_ptr(irq_array); // point to this array
-
+	
+	
+	// clear the WRAM, not done by the init code
+	// memfill(void *dst,unsigned char value,unsigned int len);
+	memfill(wram_array,0,0x2000); 
+	
+	
 	wram_array[0] = 'A'; // put some values at $6000-7fff
 	wram_array[2] = 'C'; // for later testing
+
 	
 	ppu_off(); // screen off
 	pal_bg(palette_bg); //	load the BG palette
@@ -277,44 +282,47 @@ void main (void) {
 			if(char_state >=4) char_state = 0;
 		}
 		
+		
 		// load the irq array with values it parse
+		// ! CHANGED it, double buffered so we aren't editing the same
+		// array that the irq system is reading from
 		
-		// top of the screen
+		// top of the screen, probably read in v-blank
 		// put whole screen things here, before the split
-		irq_array[0] = 0xfc; // CHR mode 5, change the 0xc00-0xfff tiles
-		irq_array[1] = 8; // top of the screen, static value
-		irq_array[2] = 47; // value < 0xf0 = scanline count, 1 less than #
-		
+		double_buffer[0] = 0xfc; // CHR mode 5, change the 0xc00-0xfff tiles
+		double_buffer[1] = 8; // top of the screen, static value
+		double_buffer[2] = 47; // value < 0xf0 = scanline count, 1 less than #
+
 		// after the first split
-		irq_array[3] = 0xf5; // H scroll change, do first for timing
+		double_buffer[3] = 0xf5; // H scroll change, do first for timing
 		temp = scroll2 >> 8;
-		irq_array[4] = temp; // scroll value
-		irq_array[5] = 0xfc; // CHR mode 5, change the 0xc00-0xfff tiles
-		irq_array[6] = 8 + char_state; // value = 8,9,10,or 11
-		irq_array[7] = 29; // scanline count
+		double_buffer[4] = temp; // scroll value
+		double_buffer[5] = 0xfc; // CHR mode 5, change the 0xc00-0xfff tiles
+		double_buffer[6] = 8 + char_state; // value = 8,9,10,or 11
+		double_buffer[7] = 29; // scanline count
 		
 		// after the 2nd split
-		irq_array[8] = 0xf5; // H scroll change
+		double_buffer[8] = 0xf5; // H scroll change
 		temp = scroll3 >> 8;
-		irq_array[9] = temp; // scroll value
-			irq_array[10] = 0xf1; // $2001 test changing color emphasis
-			irq_array[11] = 0xfe; // value COL_EMP_DARK 0xe0 + 0x1e
-			//irq_array[11] = 0x1f; // alternate value for grayscale
-		irq_array[12] = 30; // scanline count
+		double_buffer[9] = temp; // scroll value
+			double_buffer[10] = 0xf1; // $2001 test changing color emphasis
+			double_buffer[11] = 0xfe; // value COL_EMP_DARK 0xe0 + 0x1e
+			//double_buffer[11] = 0x1f; // alternate value for grayscale
+		double_buffer[12] = 30; // scanline count
 		
 		// after the 3rd split
-		irq_array[13] = 0xf5; // H scroll change
+		double_buffer[13] = 0xf5; // H scroll change
 		temp = scroll4 >> 8;
-		irq_array[14] = temp; // scroll value
-		irq_array[15] = 50; // scanline count
+		double_buffer[14] = temp; // scroll value
+		double_buffer[15] = 30; // scanline count
 		
-		irq_array[16] = 0xf5; // H scroll change
-		irq_array[17] = 0; // to zero, to set the fine X scroll
-		irq_array[18] = 0xf6; // 2 writes to 2006 shifts screen
-		irq_array[19] = 0x20; // need 2 values...
-		irq_array[20] = 0x00; // PPU address $2000 = top of screen
+		double_buffer[16] = 0xf5; // H scroll change
+		double_buffer[17] = 0; // to zero, to set the fine X scroll
+		double_buffer[18] = 0xf6; // 2 writes to 2006 shifts screen
+		double_buffer[19] = 0x20; // need 2 values...
+		double_buffer[20] = 0x00; // PPU address $2000 = top of screen
 		
-		irq_array[21] = 0xff; // end of data
+		double_buffer[21] = 0xff; // end of data
 		
 		
 		if(pad1 & PAD_LEFT){ // shift screen right = subtract from scroll
@@ -332,6 +340,17 @@ void main (void) {
 			sprite_y += 1;
 		}
 		draw_sprites();
+		
+		// wait till the irq system is done before changing it
+		// this could waste a lot of CPU time, so we do it last
+		while(!is_irq_done() ){ // have we reached the 0xff, end of data
+							// is_irq_done() returns zero if not done
+			// do nothing while we wait
+		}
+		
+		// copy from double_buffer to the irq_array
+		// memcpy(void *dst,void *src,unsigned int len);
+		memcpy(irq_array, double_buffer, sizeof(irq_array)); 
 	}
 }
 

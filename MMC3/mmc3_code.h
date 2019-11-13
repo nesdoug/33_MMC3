@@ -93,6 +93,13 @@ void disable_irq(void);
 void set_irq_ptr(char * address);
 
 
+// Check if it's safe to write to the irq array
+// returns 0xff if done, zero if not done
+// if the irq pointer is pointing to 0xff it is
+// safe to edit.
+unsigned char is_irq_done(void);
+
+
 
 
 

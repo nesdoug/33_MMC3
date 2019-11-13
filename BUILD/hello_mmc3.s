@@ -24,6 +24,8 @@
 	.import		_vram_adr
 	.import		_vram_put
 	.import		_vram_write
+	.import		_memcpy
+	.import		_memfill
 	.import		_get_pad_new
 	.import		_get_frame_count
 	.import		_set_scroll_x
@@ -35,6 +37,7 @@
 	.import		_set_prg_8000
 	.import		_set_mirroring
 	.import		_set_irq_ptr
+	.import		_is_irq_done
 	.export		_RoundSprL
 	.export		_RoundSprR
 	.export		_arg1
@@ -42,9 +45,6 @@
 	.export		_pad1
 	.export		_pad1_new
 	.export		_char_state
-	.export		_song
-	.export		_sound
-	.export		_pauze
 	.export		_scroll_top
 	.export		_scroll2
 	.export		_scroll3
@@ -54,6 +54,7 @@
 	.export		_sprite_y
 	.export		_dirLR
 	.export		_irq_array
+	.export		_double_buffer
 	.export		_wram_array
 	.export		_palette_bg
 	.export		_palette_spr
@@ -182,12 +183,6 @@ _pad1_new:
 	.res	1,$00
 _char_state:
 	.res	1,$00
-_song:
-	.res	1,$00
-_sound:
-	.res	1,$00
-_pauze:
-	.res	1,$00
 _scroll_top:
 	.res	2,$00
 _scroll2:
@@ -206,7 +201,9 @@ _dirLR:
 	.res	1,$00
 .segment	"BSS"
 _irq_array:
-	.res	64,$00
+	.res	32,$00
+_double_buffer:
+	.res	32,$00
 .segment	"XRAM"
 _wram_array:
 	.res	8192,$00
@@ -600,7 +597,7 @@ L0014:	rts
 ; if(!dirLR) { // left
 ;
 	lda     _dirLR
-	bne     L0206
+	bne     L0215
 ;
 ; oam_meta_spr(sprite_x, sprite_y, RoundSprL);
 ;
@@ -617,7 +614,7 @@ L0014:	rts
 ;
 ; oam_meta_spr(sprite_x, sprite_y, RoundSprR);
 ;
-L0206:	jsr     decsp2
+L0215:	jsr     decsp2
 	lda     _sprite_x
 	ldy     #$01
 	sta     (sp),y
@@ -661,6 +658,21 @@ L0206:	jsr     decsp2
 	lda     #<(_irq_array)
 	ldx     #>(_irq_array)
 	jsr     _set_irq_ptr
+;
+; memfill(wram_array,0,0x2000); 
+;
+	jsr     decsp3
+	lda     #<(_wram_array)
+	ldy     #$01
+	sta     (sp),y
+	iny
+	lda     #>(_wram_array)
+	sta     (sp),y
+	lda     #$00
+	tay
+	sta     (sp),y
+	ldx     #$20
+	jsr     _memfill
 ;
 ; wram_array[0] = 'A'; // put some values at $6000-7fff
 ;
@@ -960,7 +972,7 @@ L0206:	jsr     decsp2
 ;
 ; ppu_wait_nmi();
 ;
-L0176:	jsr     _ppu_wait_nmi
+L017B:	jsr     _ppu_wait_nmi
 ;
 ; pad1 = pad_poll(0);
 ;
@@ -978,7 +990,7 @@ L0176:	jsr     _ppu_wait_nmi
 ;
 	lda     _pad1
 	and     #$80
-	beq     L0213
+	beq     L0222
 ;
 ; scroll_top -= 0x80; // sub pixel movement
 ;
@@ -986,12 +998,12 @@ L0176:	jsr     _ppu_wait_nmi
 	sec
 	sbc     #$80
 	sta     _scroll_top
-	bcs     L0185
+	bcs     L018A
 	dec     _scroll_top+1
 ;
 ; scroll2 -= 0x100; // 1 pixel
 ;
-L0185:	lda     _scroll2
+L018A:	lda     _scroll2
 	sec
 	sbc     #$00
 	sta     _scroll2
@@ -1021,9 +1033,9 @@ L0185:	lda     _scroll2
 ;
 ; if(pad1 & PAD_B){ // shift screen right = subtract from scroll
 ;
-L0213:	lda     _pad1
+L0222:	lda     _pad1
 	and     #$40
-	beq     L0214
+	beq     L0223
 ;
 ; scroll_top += 0x80; // sub pixel movement
 ;
@@ -1031,12 +1043,12 @@ L0213:	lda     _pad1
 	clc
 	adc     _scroll_top
 	sta     _scroll_top
-	bcc     L0190
+	bcc     L0195
 	inc     _scroll_top+1
 ;
 ; scroll2 += 0x100; // 1 pixel
 ;
-L0190:	lda     #$00
+L0195:	lda     #$00
 	clc
 	adc     _scroll2
 	sta     _scroll2
@@ -1066,7 +1078,7 @@ L0190:	lda     #$00
 ;
 ; temp = scroll_top >> 8;
 ;
-L0214:	lda     _scroll_top+1
+L0223:	lda     _scroll_top+1
 	sta     _temp
 ;
 ; set_scroll_x(temp);
@@ -1078,7 +1090,7 @@ L0214:	lda     _scroll_top+1
 ;
 	jsr     _get_frame_count
 	and     #$03
-	bne     L0215
+	bne     L0224
 ;
 ; ++char_state;
 ;
@@ -1088,139 +1100,139 @@ L0214:	lda     _scroll_top+1
 ;
 	lda     _char_state
 	cmp     #$04
-	bcc     L0215
+	bcc     L0224
 	lda     #$00
 	sta     _char_state
 ;
-; irq_array[0] = 0xfc; // CHR mode 5, change the 0xc00-0xfff tiles
+; double_buffer[0] = 0xfc; // CHR mode 5, change the 0xc00-0xfff tiles
 ;
-L0215:	lda     #$FC
-	sta     _irq_array
+L0224:	lda     #$FC
+	sta     _double_buffer
 ;
-; irq_array[1] = 8; // top of the screen, static value
+; double_buffer[1] = 8; // top of the screen, static value
 ;
 	lda     #$08
-	sta     _irq_array+1
+	sta     _double_buffer+1
 ;
-; irq_array[2] = 47; // value < 0xf0 = scanline count, 1 less than #
+; double_buffer[2] = 47; // value < 0xf0 = scanline count, 1 less than #
 ;
 	lda     #$2F
-	sta     _irq_array+2
+	sta     _double_buffer+2
 ;
-; irq_array[3] = 0xf5; // H scroll change, do first for timing
+; double_buffer[3] = 0xf5; // H scroll change, do first for timing
 ;
 	lda     #$F5
-	sta     _irq_array+3
+	sta     _double_buffer+3
 ;
 ; temp = scroll2 >> 8;
 ;
 	lda     _scroll2+1
 	sta     _temp
 ;
-; irq_array[4] = temp; // scroll value
+; double_buffer[4] = temp; // scroll value
 ;
-	sta     _irq_array+4
+	sta     _double_buffer+4
 ;
-; irq_array[5] = 0xfc; // CHR mode 5, change the 0xc00-0xfff tiles
+; double_buffer[5] = 0xfc; // CHR mode 5, change the 0xc00-0xfff tiles
 ;
 	lda     #$FC
-	sta     _irq_array+5
+	sta     _double_buffer+5
 ;
-; irq_array[6] = 8 + char_state; // value = 8,9,10,or 11
+; double_buffer[6] = 8 + char_state; // value = 8,9,10,or 11
 ;
 	lda     _char_state
 	clc
 	adc     #$08
-	sta     _irq_array+6
+	sta     _double_buffer+6
 ;
-; irq_array[7] = 29; // scanline count
+; double_buffer[7] = 29; // scanline count
 ;
 	lda     #$1D
-	sta     _irq_array+7
+	sta     _double_buffer+7
 ;
-; irq_array[8] = 0xf5; // H scroll change
+; double_buffer[8] = 0xf5; // H scroll change
 ;
 	lda     #$F5
-	sta     _irq_array+8
+	sta     _double_buffer+8
 ;
 ; temp = scroll3 >> 8;
 ;
 	lda     _scroll3+1
 	sta     _temp
 ;
-; irq_array[9] = temp; // scroll value
+; double_buffer[9] = temp; // scroll value
 ;
-	sta     _irq_array+9
+	sta     _double_buffer+9
 ;
-; irq_array[10] = 0xf1; // $2001 test changing color emphasis
+; double_buffer[10] = 0xf1; // $2001 test changing color emphasis
 ;
 	lda     #$F1
-	sta     _irq_array+10
+	sta     _double_buffer+10
 ;
-; irq_array[11] = 0xfe; // value COL_EMP_DARK 0xe0 + 0x1e
+; double_buffer[11] = 0xfe; // value COL_EMP_DARK 0xe0 + 0x1e
 ;
 	lda     #$FE
-	sta     _irq_array+11
+	sta     _double_buffer+11
 ;
-; irq_array[12] = 30; // scanline count
+; double_buffer[12] = 30; // scanline count
 ;
 	lda     #$1E
-	sta     _irq_array+12
+	sta     _double_buffer+12
 ;
-; irq_array[13] = 0xf5; // H scroll change
+; double_buffer[13] = 0xf5; // H scroll change
 ;
 	lda     #$F5
-	sta     _irq_array+13
+	sta     _double_buffer+13
 ;
 ; temp = scroll4 >> 8;
 ;
 	lda     _scroll4+1
 	sta     _temp
 ;
-; irq_array[14] = temp; // scroll value
+; double_buffer[14] = temp; // scroll value
 ;
-	sta     _irq_array+14
+	sta     _double_buffer+14
 ;
-; irq_array[15] = 50; // scanline count
+; double_buffer[15] = 30; // scanline count
 ;
-	lda     #$32
-	sta     _irq_array+15
+	lda     #$1E
+	sta     _double_buffer+15
 ;
-; irq_array[16] = 0xf5; // H scroll change
+; double_buffer[16] = 0xf5; // H scroll change
 ;
 	lda     #$F5
-	sta     _irq_array+16
+	sta     _double_buffer+16
 ;
-; irq_array[17] = 0; // to zero, to set the fine X scroll
+; double_buffer[17] = 0; // to zero, to set the fine X scroll
 ;
 	lda     #$00
-	sta     _irq_array+17
+	sta     _double_buffer+17
 ;
-; irq_array[18] = 0xf6; // 2 writes to 2006 shifts screen
+; double_buffer[18] = 0xf6; // 2 writes to 2006 shifts screen
 ;
 	lda     #$F6
-	sta     _irq_array+18
+	sta     _double_buffer+18
 ;
-; irq_array[19] = 0x20; // need 2 values...
+; double_buffer[19] = 0x20; // need 2 values...
 ;
 	lda     #$20
-	sta     _irq_array+19
+	sta     _double_buffer+19
 ;
-; irq_array[20] = 0x00; // PPU address $2000 = top of screen
+; double_buffer[20] = 0x00; // PPU address $2000 = top of screen
 ;
 	lda     #$00
-	sta     _irq_array+20
+	sta     _double_buffer+20
 ;
-; irq_array[21] = 0xff; // end of data
+; double_buffer[21] = 0xff; // end of data
 ;
 	lda     #$FF
-	sta     _irq_array+21
+	sta     _double_buffer+21
 ;
 ; if(pad1 & PAD_LEFT){ // shift screen right = subtract from scroll
 ;
 	lda     _pad1
 	and     #$02
-	beq     L0216
+	beq     L0225
 ;
 ; sprite_x -= 1;
 ;
@@ -1232,10 +1244,10 @@ L0215:	lda     #$FC
 ;
 ; else if(pad1 & PAD_RIGHT){ // shift screen right = subtract from scroll
 ;
-	jmp     L0211
-L0216:	lda     _pad1
+	jmp     L0220
+L0225:	lda     _pad1
 	and     #$01
-	beq     L0217
+	beq     L0226
 ;
 ; sprite_x += 1;
 ;
@@ -1244,13 +1256,13 @@ L0216:	lda     _pad1
 ; dirLR = 1;
 ;
 	lda     #$01
-L0211:	sta     _dirLR
+L0220:	sta     _dirLR
 ;
 ; if(pad1 & PAD_UP){ // shift screen right = subtract from scroll
 ;
-L0217:	lda     _pad1
+L0226:	lda     _pad1
 	and     #$08
-	beq     L0218
+	beq     L0227
 ;
 ; sprite_y -= 1;
 ;
@@ -1258,10 +1270,10 @@ L0217:	lda     _pad1
 ;
 ; else if(pad1 & PAD_DOWN){ // shift screen right = subtract from scroll
 ;
-	jmp     L01FF
-L0218:	lda     _pad1
+	jmp     L0204
+L0227:	lda     _pad1
 	and     #$04
-	beq     L01FF
+	beq     L0204
 ;
 ; sprite_y += 1;
 ;
@@ -1269,11 +1281,25 @@ L0218:	lda     _pad1
 ;
 ; draw_sprites();
 ;
-L01FF:	jsr     _draw_sprites
+L0204:	jsr     _draw_sprites
+;
+; while(!is_irq_done() ){ // have we reached the 0xff, end of data
+;
+L020B:	jsr     _is_irq_done
+	tax
+	beq     L020B
+;
+; memcpy(irq_array, double_buffer, sizeof(irq_array)); 
+;
+	ldy     #$1F
+L0212:	lda     _double_buffer,y
+	sta     _irq_array,y
+	dey
+	bpl     L0212
 ;
 ; while (1){ // infinite loop
 ;
-	jmp     L0176
+	jmp     L017B
 
 .endproc
 
