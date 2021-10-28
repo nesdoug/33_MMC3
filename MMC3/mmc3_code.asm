@@ -328,6 +328,7 @@ set_scanline_count:
 	sta $c000 ; set the irq counter reload value
 	sta $c001 ; reload the reload value
 	sta $e001 ; enable the mmc3 irq
+    cli ;make sure irqs are enabled
 	rts
 
 

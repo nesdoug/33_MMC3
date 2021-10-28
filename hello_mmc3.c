@@ -225,9 +225,10 @@ void main (void) {
 	vram_put(0x2);
 
 	music_play(0);
-	ppu_on_all(); // turn on screen
+	//ppu_on_all(); // turn on screen
 	
-	
+	set_chr_mode_5(8); // make sure the gear tiles loaded
+                       // for the first few frames
 	
 	
 	// calling functions in other banks
