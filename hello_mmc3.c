@@ -284,7 +284,7 @@ void main (void) {
 		}
 		
 		
-		// load the irq array with values it parse
+		// load the irq array with values it can parse
 		// ! CHANGED it, double buffered so we aren't editing the same
 		// array that the irq system is reading from
 		
@@ -340,6 +340,7 @@ void main (void) {
 		else if(pad1 & PAD_DOWN){ // shift screen right = subtract from scroll
 			sprite_y += 1;
 		}
+		
 		draw_sprites();
 		
 		// wait till the irq system is done before changing it
@@ -354,6 +355,8 @@ void main (void) {
 		memcpy(irq_array, double_buffer, sizeof(irq_array)); 
 	}
 }
+
+
 
 	
 // testing sprites using the second tileset	

@@ -2,7 +2,7 @@
 ;with improvements by VEG
 ;Feel free to do anything you want with this code, consider it Public Domain
 
-;nesdoug version, 2019-11
+;nesdoug version 1.2, 1/1/2022
 ;minor change %%, added ldx #0 to functions returning char
 ;removed sprid from c functions to speed them up
 ;music and nmi changed for mmc3
@@ -28,7 +28,7 @@
 	.export _set_vram_update,_flush_vram_update
 	.export _memcpy,_memfill,_delay
 	
-	.export _flush_vram_update_nmi, _oam_set, _oam_get
+	.export _flush_vram_update2, _oam_set, _oam_get
 
 
 
@@ -47,10 +47,18 @@ nmi:
 
 	lda <PPU_MASK_VAR	;if rendering is disabled, do not access the VRAM at all
 	and #%00011000
-	bne @doUpdate
+	bne @renderingOn
 	jmp	@skipAll
 
+@renderingOn:
+
+	lda <VRAM_UPDATE ;is the frame complete?
+	bne @doUpdate
+	jmp @skipUpd
+
 @doUpdate:
+	lda #0
+	sta <VRAM_UPDATE
 
 	lda #>OAM_BUF		;update OAM
 	sta PPU_OAM_DMA
@@ -98,16 +106,11 @@ nmi:
 	.endrepeat
 
 @updVRAM:
-
-	lda <VRAM_UPDATE
-	beq @skipUpd
-	lda #0
-	sta <VRAM_UPDATE
 	
 	lda <NAME_UPD_ENABLE
 	beq @skipUpd
 
-	jsr _flush_vram_update_nmi
+	jsr _flush_vram_update2
 
 @skipUpd:
 
@@ -122,10 +125,10 @@ nmi:
 
 	lda <PPU_CTRL_VAR
 	sta PPU_CTRL
-	
+		
 	jsr irq_parser	; needs to happen inside v-blank... 
 					; so goes before the music
-			; but, if screen if off this should be skipped
+			; but, if screen is off this should be skipped
 
 @skipAll:
 
@@ -141,9 +144,7 @@ nmi:
 	sta <FRAME_CNT2
 
 @skipNtsc:
-
 	
-
 ;switch the music into the prg bank first
 	lda BP_BANK_8000 ;save current prg bank
 	pha
@@ -1082,7 +1083,7 @@ _flush_vram_update:
 	sta <NAME_UPD_ADR+0
 	stx <NAME_UPD_ADR+1
 
-_flush_vram_update_nmi: ;minor changes %
+_flush_vram_update2: ;minor changes %
 
 	ldy #0
 
@@ -1147,7 +1148,13 @@ _flush_vram_update_nmi: ;minor changes %
 	jmp @updName
 
 @updDone:
-
+;changed to automatically clear these
+.ifdef VRAM_BUF
+	ldx #$ff
+	stx VRAM_BUF
+	inx ;x=0
+	stx VRAM_INDEX
+.endif
 	rts
 	
 	
