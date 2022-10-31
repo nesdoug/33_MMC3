@@ -20,9 +20,9 @@ void banked_call(unsigned char bankId, void (*method)(void)) {
 // current bank, so that we may jump back to it as needed.
 
 void bank_push(unsigned char bankId) {
-    bankBuffer[bankLevel] = bankId;
+//    bankBuffer[bankLevel] = bankId;
+	bankBuffer[bankLevel] = get_prg_8000();
     ++bankLevel;
-// removed error code
     set_prg_8000(bankId);
 }
 
@@ -31,9 +31,10 @@ void bank_push(unsigned char bankId) {
 // Go back to the previous bank
 
 void bank_pop(void) {
-    --bankLevel;
-    if (bankLevel > 0) {
-        set_prg_8000(bankBuffer[bankLevel-1]);
+	
+	if (bankLevel != 0) {
+		--bankLevel;
+        set_prg_8000(bankBuffer[bankLevel]);
     }
 }
 
