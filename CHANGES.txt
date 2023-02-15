@@ -4,4 +4,10 @@ CHANGES
 last pop wasn't setting the default
 PRG bank back into place. Fixed.
 
+Feb 2023
+the "safe" bank changes were not
+thread safe. That has been fixed.
+
+PAL_BUF has been moved out of the stack
+and into the BSS segment.
 

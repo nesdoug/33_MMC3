@@ -1,5 +1,6 @@
 /*	example of MMC3 for cc65
  *	Doug Fraker 2019
+ *	Feb 2023 version
  */	
  
 #include "LIB/neslib.h"
@@ -223,7 +224,7 @@ void main (void) {
 	vram_put(0x2);
 	vram_put(0x2);
 	vram_put(0x2);
-
+    
 	music_play(0);
 	//ppu_on_all(); // turn on screen
 	
@@ -300,7 +301,7 @@ void main (void) {
 		double_buffer[4] = temp; // scroll value
 		double_buffer[5] = 0xfc; // CHR mode 5, change the 0xc00-0xfff tiles
 		double_buffer[6] = 8 + char_state; // value = 8,9,10,or 11
-		double_buffer[7] = 29; // scanline count
+		double_buffer[7] = 30; // scanline count
 		
 		// after the 2nd split
 		double_buffer[8] = 0xf5; // H scroll change

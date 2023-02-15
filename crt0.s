@@ -57,8 +57,15 @@ CTRL_PORT1	=$4016
 CTRL_PORT2	=$4017
 
 OAM_BUF		=$0200
-PAL_BUF		=$01c0
+;PAL_BUF		=$01c0
 VRAM_BUF	=$0700
+
+
+.segment "BSS"
+PAL_BUF: .res 32
+;move this out of the hardware stack
+;the mmc3 code is using more of the stack
+;and might collide with $1c0-1df
 
 
 
@@ -183,14 +190,14 @@ clearPalette:
 	bne @1
 	
 	
-	lda #$01				; DEBUGGING
-	sta PPU_DATA
-	lda #$11
-	sta PPU_DATA
-	lda #$21
-	sta PPU_DATA
-	lda #$30
-	sta PPU_DATA
+;	lda #$01				; DEBUGGING
+;	sta PPU_DATA
+;	lda #$11
+;	sta PPU_DATA
+;	lda #$21
+;	sta PPU_DATA
+;	lda #$30
+;	sta PPU_DATA
 
 clearVRAM:
 	txa

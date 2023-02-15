@@ -1,5 +1,5 @@
 README - MMC3 code for neslib based C (cc65)
-(version 1)
+(version Feb 2023)
 
 DEMO CONTROLS
 Up/Down/Right/Left - move sprites
@@ -8,7 +8,7 @@ A or B - scroll the screen
 
  
 In this configuration, A000-FFFF is fixed and only 8000-9FFF 
-is swappable.Use the banked_call() system that cppchriscpp 
+is swappable. Use the banked_call() system that cppchriscpp 
 designed. If you are calling a function in a swappable bank, 
 use a banked_call().
 
@@ -38,14 +38,12 @@ make it variable...with many changes to the asm code.
 For the scanline IRQ to work properly, you must set BG to use set 
 #0 and sprites to use #1. And the screen needs to be ON.
 
-I have it planned so that the main code only does PRG bank changes
-and the IRQ code only does CHR bank changes. So they don't conflict.
-(they share the same register pair, $8000/8001)
-You could disregard this plan, and have the main code do CHR changes,
-but make sure the IRQ system isn't doing any CHR changes. But, even
-if you don't want split screens, the IRQ system can be told to change
-CHR banks, at the end of the NMI code it does an obligatory call to
-the IRQ parser.
+
+
+
+
+
+...
 
 The scanline IRQ uses an automated system that I developed. It uses 
 a char array that describes how the screen will set scanline counts, 
@@ -99,6 +97,31 @@ PRG banks, so, it shouldn't crash the game.
 Note: use extreme caution writing to the $2000 register. I suppose you
 could change the nametable selection, but don't change the other bits
 or something bad will happen.
+
+Note that anything above the first scanline count (in the mmc3
+IRQ array) will happen inside the NMI code, before the next frame
+starts drawing to the screen.
+
+
+
+Warnings:
+
+Changes have been made, Feb 2023, if interrupts are writing 
+values to $8000, the previous $8000 setting will be restored 
+(to prevent the wrong bank swapped). 
+It's safer and less picky (and the main code should be able 
+to do anything you like now).
+
+The system works as long as the IRQ system doesn't get
+interrupted by NMI, while trying to to a CHR bank change.
+
+Don't tell the IRQ system to change a CHR bank near the bottom
+of the screen. If you need to change the CHR bank between
+frames (so it applies at the top of the next frame) you should
+put that at the very top of the IRQ array, before the
+scanline count.
+
+The new changes might effect the timing of IRQ events.
 
 
 
@@ -172,5 +195,16 @@ MODES
 *depending on C value "A12_INVERT"
 **depending on P value, the other will be fixed to the next to last bank
 
+
+
+Another warning:
+
+I put a double buffering in, to make sure that we aren't
+changing the array while the IRQ is trying to read it.
+...but it could have bugs.
+If you the frame (main code) runs long, it could
+be interrupted by NMI while copying, and cause problems.
+
+TODO - improve/fix that.
 
 
