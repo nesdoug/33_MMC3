@@ -165,8 +165,6 @@ _exit:
     stx DMC_FREQ
     stx PPU_CTRL		;no NMI
 	
-	jsr _disable_irq ;disable mmc3 IRQ
-	
 	;x is zero
 
 initPPU:
@@ -231,6 +229,8 @@ clearRAM:
 	
 	
 ; MMC3 reset
+
+	jsr _disable_irq ;disable mmc3 IRQ
 
 ; set which bank at $8000
 ; also $c000 fixed to 14 of 15
